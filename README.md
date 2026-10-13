@@ -3,4 +3,4 @@ Rules: every creature targets its nearest enemy at any distance; creatures near 
 - `WarCore/` rules, pure C#, tested: `dotnet run --project WarCore.Tests` → PASS 全9件
 - `Mod/` Unity ECS adapter for the official Mod SDK (mod.io). **Not compiled or run in-game** (needs your SDK + game). Unverified game names are marked `VERIFY` in `Mod/GameBindings.cs`.
 - `.claude/agents/ck-modder.md` Opus subagent that fixes bindings against your SDK DLLs.
-Setup: install the Core Keeper Mod SDK (mod.io guide), copy `WarCore/War.cs` + `Mod/*` into a mod folder, resolve VERIFY items.
+Setup: see SETUP.md

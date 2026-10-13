@@ -8,8 +8,7 @@ namespace CoreKeeperWar.Mod
 {
     /// Server-only. Creature AI: aim at nearest enemy at any distance; convert enemy spawners; tag new spawns.
     [WorldSystemFilter(WorldSystemFilterFlags.ServerSimulation)]
-    [DisableAutoCreation] // registered by WarMod.EarlyInit like CoreLib does
-    public partial class WarSystem : SystemBase
+    public partial class WarSystem : PugSimulationSystemBase
     {
         EntityQuery _creatures, _spawners;
         readonly List<Unit> _cu = new List<Unit>(), _su = new List<Unit>(), _all = new List<Unit>();
@@ -19,6 +18,7 @@ namespace CoreKeeperWar.Mod
         {
             _creatures = GetEntityQuery(GameBindings.Creatures);
             _spawners = GetEntityQuery(GameBindings.Spawners);
+            base.OnCreate();
         }
 
         protected override void OnUpdate()
@@ -60,6 +60,7 @@ namespace CoreKeeperWar.Mod
                 int s = War.SpawnerToConvert(u, _su);
                 if (s >= 0) { GameBindings.ConvertSpawner(em, spawnerEnts[s], u.Faction); _su[s] = new Unit { X = _su[s].X, Y = _su[s].Y, Faction = u.Faction }; }
             }
+            base.OnUpdate();
             // ponytail: player entities aren't in the pool yet, so monsters only chase creatures/spawners; add players via a Player component query.
         }
     }
