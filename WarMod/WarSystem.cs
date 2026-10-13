@@ -10,12 +10,15 @@ namespace CoreKeeperWar.Mod
     /// creatures first seen near a spawner inherit its faction. Auto-registered by the SDK (no IMod needed).
     [WorldSystemFilter(WorldSystemFilterFlags.ServerSimulation)]
     [UpdateInGroup(typeof(SimulationSystemGroup))]
+    [UpdateAfter(typeof(StateRequestGroup))]   // must run after the game clears PathFindCD.targetEntity...
+    [UpdateBefore(typeof(PathFindSystem))]     // ...and before it computes the path
     public partial class WarSystem : PugSimulationSystemBase
     {
         EntityQuery _creatures, _spawners, _players;
         readonly List<Unit> _cu = new List<Unit>(), _su = new List<Unit>(), _all = new List<Unit>();
         readonly List<Entity> _allEnt = new List<Entity>();
         double _next;
+        readonly Dictionary<Entity, Entity> _targets = new Dictionary<Entity, Entity>();
 
         protected override void OnCreate()
         {
@@ -29,8 +32,11 @@ namespace CoreKeeperWar.Mod
         protected override void OnUpdate()
         {
             base.OnUpdate();
+            var em0 = EntityManager;
+            foreach (var kv in _targets) if (em0.Exists(kv.Key) && em0.Exists(kv.Value)) GameBindings.SetTarget(em0, kv.Key, kv.Value);
             if (SystemAPI.Time.ElapsedTime < _next) return;
             _next = SystemAPI.Time.ElapsedTime + 0.5; // ponytail: 2 Hz full rescan O(n^2); spatial hash if >1000 units
+            _targets.Clear();
 
             var em = EntityManager;
             var sEnts = _spawners.ToEntityArray(Allocator.Temp);
@@ -66,12 +72,12 @@ namespace CoreKeeperWar.Mod
                 _all.Add(new Unit { X = p.x, Y = p.y, Faction = Faction.Player }); _allEnt.Add(pl);
             }
 
-            int set = 0, conv = 0;
+            int set = 0, conv = 0, chasing = 0;
             for (int i = 0; i < cEnts.Length; i++)
             {
                 var u = _cu[i];
                 int n = War.Nearest(u.X, u.Y, _all, War.Opposite(u.Faction));
-                if (n >= 0) { GameBindings.SetTarget(em, cEnts[i], _allEnt[n]); set++; }
+                if (n >= 0) { _targets[cEnts[i]] = _allEnt[n]; set++; if (GameBindings.IsChasing(em, cEnts[i])) chasing++; }
                 int s = War.SpawnerToConvert(u, _su);
                 if (s >= 0)
                 {
@@ -80,7 +86,7 @@ namespace CoreKeeperWar.Mod
                     _su[s] = new Unit { X = _su[s].X, Y = _su[s].Y, Faction = u.Faction };
                 }
             }
-            UnityEngine.Debug.Log($"[WAR] creatures={cEnts.Length} spawners={sEnts.Length} players={_players.CalculateEntityCount()} targeted={set} converted={conv}");
+            UnityEngine.Debug.Log($"[WAR] creatures={cEnts.Length} spawners={sEnts.Length} players={_players.CalculateEntityCount()} targeted={set} chasing={chasing} converted={conv}");
         }
     }
 }
