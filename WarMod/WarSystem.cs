@@ -6,6 +6,7 @@ using Unity.Transforms;
 
 namespace CoreKeeperWar.Mod
 {
+    /// NOTE: world plane is X/Z (Y is height), so Unit.Y holds position.z.
     /// Server-only. Creatures chase the nearest enemy at any distance; creatures near an enemy spawner convert it;
     /// creatures first seen near a spawner inherit its faction. Auto-registered by the SDK (no IMod needed).
     [WorldSystemFilter(WorldSystemFilterFlags.ServerSimulation)]
@@ -58,7 +59,7 @@ namespace CoreKeeperWar.Mod
                     em.AddComponentData(s, new WarFactionCD { faction = f });
                     UnityEngine.Debug.Log($"[WAR] new spawner obj={(em.HasComponent<ObjectDataCD>(s) ? em.GetComponentData<ObjectDataCD>(s).objectID.ToString() : "?")} owner={f} first={!_scanned}");
                 }
-                                _su.Add(new Unit { X = p.x, Y = p.y, Faction = em.GetComponentData<WarFactionCD>(s).faction, R = GameBindings.SpawnerRadius });
+                                _su.Add(new Unit { X = p.x, Y = p.z, Faction = em.GetComponentData<WarFactionCD>(s).faction, R = GameBindings.SpawnerRadius });
             }
             _scanned = true;
 
@@ -69,11 +70,11 @@ namespace CoreKeeperWar.Mod
                 var p = em.GetComponentData<LocalTransform>(c).Position;
                 if (!em.HasComponent<WarFactionCD>(c)) // first sight = fresh spawn
                 {
-                    var f = War.FactionOfNewCreature(p.x, p.y, _su);
+                    var f = War.FactionOfNewCreature(p.x, p.z, _su);
                     em.AddComponentData(c, new WarFactionCD { faction = f });
                     if (f == Faction.Player) GameBindings.MakeAlly(em, c);
                 }
-                _cu.Add(new Unit { X = p.x, Y = p.y, Faction = em.GetComponentData<WarFactionCD>(c).faction });
+                _cu.Add(new Unit { X = p.x, Y = p.z, Faction = em.GetComponentData<WarFactionCD>(c).faction });
             }
 
             // target pool: creatures + spawners + players (players are Player side)
@@ -83,7 +84,7 @@ namespace CoreKeeperWar.Mod
             foreach (var pl in plEnts)
             {
                 var p = em.GetComponentData<LocalTransform>(pl).Position;
-                _all.Add(new Unit { X = p.x, Y = p.y, Faction = Faction.Player }); _allEnt.Add(pl);
+                _all.Add(new Unit { X = p.x, Y = p.z, Faction = Faction.Player }); _allEnt.Add(pl);
             }
 
             int set = 0, conv = 0, chasing = 0, asleep = 0, pathReady = 0;
