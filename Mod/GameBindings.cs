@@ -1,28 +1,30 @@
-// ALL game-specific names live here. Names marked VERIFY are unconfirmed (no game DLLs were available
-// when written): check with ilspycmd/dnSpy against Pug.ECS.Components.dll, fix here only (see .claude/agents/ck-modder.md).
+// Game-specific names, verified by decompiling the user's Pug.ECS.Components.dll (SDK 1.3.0.5 / game 2026-10).
+// Items marked VERIFY are semantics still to confirm in-game.
 using Unity.Entities;
-using Unity.Mathematics;
 using Unity.Transforms;
 
 namespace CoreKeeperWar.Mod
 {
-    /// Our own marker added to every creature/spawner we manage.
+    /// Our own marker on every creature/spawner we manage.
     public struct WarFactionCD : IComponentData { public Faction faction; }
 
     public static class GameBindings
     {
-        // VERIFY: components identifying a hostile creature and a spawner entity in the live game.
-        public static EntityQueryDesc Creatures => new EntityQueryDesc { All = new[] { ComponentType.ReadOnly<LocalTransform>(), ComponentType.ReadOnly<EnemyCD>() } };       // VERIFY EnemyCD
-        public static EntityQueryDesc Spawners  => new EntityQueryDesc { All = new[] { ComponentType.ReadOnly<LocalTransform>(), ComponentType.ReadOnly<SpawnerCD>() } };      // VERIFY SpawnerCD
+        public static EntityQuery CreatureQuery(ref SystemState s) => s.GetEntityQuery(ComponentType.ReadOnly<EnemyCD>(), ComponentType.ReadOnly<LocalTransform>(), ComponentType.ReadWrite<FactionCD>());
+        public static EntityQuery SpawnerQuery(ref SystemState s) => s.GetEntityQuery(ComponentType.ReadOnly<SpawnerCD>(), ComponentType.ReadOnly<LocalTransform>());
 
-        // VERIFY: how the game aims an enemy. Expected: write a target position / entity the move system already follows.
-        public static void SetTarget(EntityManager em, Entity creature, float2 pos) { /* em.SetComponentData(creature, new TargetPositionCD{ value = pos }); */ }
+        /// Chase target any distance away. ChaseStateCD.targetEntity = current target; neverTimeoutChasing stops it giving up.
+        /// VERIFY: the state machine must be in the chase state (internalState) and the game's own target-select system may overwrite targetEntity each tick.
+        public static void SetTarget(EntityManager em, Entity creature, Entity target)
+        {
+            if (!em.HasComponent<ChaseStateCD>(creature)) return;
+            var c = em.GetComponentData<ChaseStateCD>(creature);
+            c.targetEntity = target; c.initialTargetEntity = target; c.neverTimeoutChasing = true;
+            em.SetComponentData(creature, c);
+        }
 
-        // VERIFY: charm/ally status so the creature stops attacking players (e.g. a Charmed / Owner component).
-        public static void MakeAlly(EntityManager em, Entity creature, Entity owner) { /* em.AddComponentData(creature, new CharmedCD{ owner = owner }); */ }
-        public static void MakeHostile(EntityManager em, Entity creature) { /* em.RemoveComponent<CharmedCD>(creature); */ }
-
-        // VERIFY: swapping spawner ownership. Simplest: keep the entity, only flip WarFactionCD (new creatures read it).
-        public static void ConvertSpawner(EntityManager em, Entity spawner, Faction to) => em.SetComponentData(spawner, new WarFactionCD { faction = to });
+        /// Ally = player faction: FactionCD.CanAttack already returns false vs Player, and monsters target it.
+        public static void MakeAlly(EntityManager em, Entity e) { var f = em.GetComponentData<FactionCD>(e); f.faction = FactionID.Player; em.SetComponentData(e, f); }
+        public static void MakeHostile(EntityManager em, Entity e) { var f = em.GetComponentData<FactionCD>(e); f.faction = f.originalFaction; em.SetComponentData(e, f); }
     }
 }

@@ -1,67 +1,82 @@
 using System.Collections.Generic;
 using Unity.Collections;
 using Unity.Entities;
-using Unity.Transforms;
 using Unity.NetCode;
+using Unity.Transforms;
 
 namespace CoreKeeperWar.Mod
 {
-    /// Server-only. Creature AI: aim at nearest enemy at any distance; convert enemy spawners; tag new spawns.
+    /// Server-only. Creatures chase the nearest enemy at any distance; creatures near an enemy spawner convert it;
+    /// creatures first seen near a spawner inherit its faction. Auto-registered by the SDK (no IMod needed).
     [WorldSystemFilter(WorldSystemFilterFlags.ServerSimulation)]
+    [UpdateInGroup(typeof(SimulationSystemGroup))]
     public partial class WarSystem : PugSimulationSystemBase
     {
-        EntityQuery _creatures, _spawners;
+        EntityQuery _creatures, _spawners, _players;
         readonly List<Unit> _cu = new List<Unit>(), _su = new List<Unit>(), _all = new List<Unit>();
-        float _next;
+        readonly List<Entity> _allEnt = new List<Entity>();
+        double _next;
 
         protected override void OnCreate()
         {
-            _creatures = GetEntityQuery(GameBindings.Creatures);
-            _spawners = GetEntityQuery(GameBindings.Spawners);
+            _creatures = GetEntityQuery(ComponentType.ReadOnly<EnemyCD>(), ComponentType.ReadOnly<LocalTransform>(), ComponentType.ReadWrite<FactionCD>());
+            _spawners = GetEntityQuery(ComponentType.ReadOnly<SpawnerCD>(), ComponentType.ReadOnly<LocalTransform>());
+            _players = GetEntityQuery(ComponentType.ReadOnly<PlayerGhost>(), ComponentType.ReadOnly<LocalTransform>());
             base.OnCreate();
         }
 
         protected override void OnUpdate()
         {
+            base.OnUpdate();
             if (SystemAPI.Time.ElapsedTime < _next) return;
-            _next = (float)SystemAPI.Time.ElapsedTime + 0.5f; // ponytail: 2 Hz full rescan, spatial hash if >1000 units
+            _next = SystemAPI.Time.ElapsedTime + 0.5; // ponytail: 2 Hz full rescan O(n^2); spatial hash if >1000 units
 
             var em = EntityManager;
-            var spawnerEnts = _spawners.ToEntityArray(Allocator.Temp);
+            var sEnts = _spawners.ToEntityArray(Allocator.Temp);
             _su.Clear();
-            foreach (var s in spawnerEnts)
+            foreach (var s in sEnts)
             {
                 if (!em.HasComponent<WarFactionCD>(s)) em.AddComponentData(s, new WarFactionCD { faction = Faction.Monster });
                 var p = em.GetComponentData<LocalTransform>(s).Position;
                 _su.Add(new Unit { X = p.x, Y = p.y, Faction = em.GetComponentData<WarFactionCD>(s).faction });
             }
 
-            var ents = _creatures.ToEntityArray(Allocator.Temp);
+            var cEnts = _creatures.ToEntityArray(Allocator.Temp);
             _cu.Clear();
-            foreach (var c in ents)
+            foreach (var c in cEnts)
             {
                 var p = em.GetComponentData<LocalTransform>(c).Position;
-                if (!em.HasComponent<WarFactionCD>(c)) // first sight = fresh spawn: inherit nearest spawner's faction
+                if (!em.HasComponent<WarFactionCD>(c)) // first sight = fresh spawn
                 {
                     var f = War.FactionOfNewCreature(p.x, p.y, _su);
                     em.AddComponentData(c, new WarFactionCD { faction = f });
-                    if (f == Faction.Player) GameBindings.MakeAlly(em, c, Entity.Null); // VERIFY owner
+                    if (f == Faction.Player) GameBindings.MakeAlly(em, c);
                 }
                 _cu.Add(new Unit { X = p.x, Y = p.y, Faction = em.GetComponentData<WarFactionCD>(c).faction });
             }
 
-            // targets = every creature + spawner of the other side
-            _all.Clear(); _all.AddRange(_cu); _all.AddRange(_su);
-            for (int i = 0; i < ents.Length; i++)
+            // target pool: creatures + spawners + players (players are Player side)
+            _all.Clear(); _allEnt.Clear();
+            for (int i = 0; i < cEnts.Length; i++) { _all.Add(_cu[i]); _allEnt.Add(cEnts[i]); }
+            for (int i = 0; i < sEnts.Length; i++) { _all.Add(_su[i]); _allEnt.Add(sEnts[i]); }
+            foreach (var pl in _players.ToEntityArray(Allocator.Temp))
+            {
+                var p = em.GetComponentData<LocalTransform>(pl).Position;
+                _all.Add(new Unit { X = p.x, Y = p.y, Faction = Faction.Player }); _allEnt.Add(pl);
+            }
+
+            for (int i = 0; i < cEnts.Length; i++)
             {
                 var u = _cu[i];
                 int n = War.Nearest(u.X, u.Y, _all, War.Opposite(u.Faction));
-                if (n >= 0) GameBindings.SetTarget(em, ents[i], new Unity.Mathematics.float2(_all[n].X, _all[n].Y));
+                if (n >= 0) GameBindings.SetTarget(em, cEnts[i], _allEnt[n]);
                 int s = War.SpawnerToConvert(u, _su);
-                if (s >= 0) { GameBindings.ConvertSpawner(em, spawnerEnts[s], u.Faction); _su[s] = new Unit { X = _su[s].X, Y = _su[s].Y, Faction = u.Faction }; }
+                if (s >= 0)
+                {
+                    em.SetComponentData(sEnts[s], new WarFactionCD { faction = u.Faction });
+                    _su[s] = new Unit { X = _su[s].X, Y = _su[s].Y, Faction = u.Faction };
+                }
             }
-            base.OnUpdate();
-            // ponytail: player entities aren't in the pool yet, so monsters only chase creatures/spawners; add players via a Player component query.
         }
     }
 }
