@@ -11,6 +11,27 @@ namespace CoreKeeperWar.Mod
     public static class GameBindings
     {
 
+        /// Real spawner entities (SpawnerCD is the per-player ambient spawner, NOT a placeable one - seen in log: obj=Player).
+        /// VERIFY which one the player-placed spawner is; log prints objectID of every new match.
+        public static EntityQueryDesc SpawnerDesc => new EntityQueryDesc
+        {
+            All = new[] { ComponentType.ReadOnly<LocalTransform>() },
+            Any = new[]
+            {
+                ComponentType.ReadOnly<EnemySpawnerPlatformCD>(), ComponentType.ReadOnly<LarvaTerritorySpawnerCD>(), ComponentType.ReadOnly<SlimeTerritorySpawnerCD>(),
+                ComponentType.ReadOnly<CavelingTerritorySpawnerCD>(), ComponentType.ReadOnly<CavelingNatureTerritorySpawnerCD>(), ComponentType.ReadOnly<BossLarvaSpawnerCD>(),
+            }
+        };
+        public const float SpawnerRadius = 12f;
+
+        public static bool IsSleeping(EntityManager em, Entity e) => em.HasComponent<StateInfoCD>(e) && em.GetComponentData<StateInfoCD>(e).IsCurrentState(StateID.Sleep);
+        public static bool PathReady(EntityManager em, Entity e)
+        {
+            if (!em.HasComponent<ChaseStateCD>(e)) return false;
+            var pfe = em.GetComponentData<ChaseStateCD>(e).pathFindEntity;
+            return pfe != Entity.Null && em.HasComponent<PathFindCD>(pfe) && em.GetComponentData<PathFindCD>(pfe).HasCalculatedPathForTarget() && em.GetComponentData<PathFindCD>(pfe).targetEntity != Entity.Null;
+        }
+
         public const int SearchRadius = 40; // ponytail: BFS radius cap (tiles). Targets beyond it get no path; raise if perf allows.
 
         /// Far-chase trick (from decompiled ChaseStateRequest): the entity in PathFindCD.targetEntity bypasses the chaseAtDistanceSq gate
