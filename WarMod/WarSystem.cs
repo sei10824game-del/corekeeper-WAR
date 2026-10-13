@@ -18,6 +18,8 @@ namespace CoreKeeperWar.Mod
         readonly List<Unit> _cu = new List<Unit>(), _su = new List<Unit>(), _all = new List<Unit>();
         readonly List<Entity> _allEnt = new List<Entity>();
         double _next;
+        bool _scanned;
+        const float PlaceRange = 8f;
         readonly Dictionary<Entity, Entity> _targets = new Dictionary<Entity, Entity>();
 
         protected override void OnCreate()
@@ -39,14 +41,27 @@ namespace CoreKeeperWar.Mod
             _targets.Clear();
 
             var em = EntityManager;
+            // players first: a spawner that appears after the first scan right next to a player was placed by them
+            var plEnts = _players.ToEntityArray(Allocator.Temp);
+            var plPos = new List<Unity.Mathematics.float3>();
+            foreach (var pl in plEnts) plPos.Add(em.GetComponentData<LocalTransform>(pl).Position);
+
             var sEnts = _spawners.ToEntityArray(Allocator.Temp);
             _su.Clear();
             foreach (var s in sEnts)
             {
-                if (!em.HasComponent<WarFactionCD>(s)) em.AddComponentData(s, new WarFactionCD { faction = Faction.Monster });
                 var p = em.GetComponentData<LocalTransform>(s).Position;
-                _su.Add(new Unit { X = p.x, Y = p.y, Faction = em.GetComponentData<WarFactionCD>(s).faction });
+                if (!em.HasComponent<WarFactionCD>(s))
+                {
+                    var f = Faction.Monster;
+                    if (_scanned) foreach (var pp in plPos) if (Unity.Mathematics.math.distancesq(pp, p) <= PlaceRange * PlaceRange) f = Faction.Player; // ponytail: heuristic; use a placed-by-player component if one exists
+                    em.AddComponentData(s, new WarFactionCD { faction = f });
+                    UnityEngine.Debug.Log($"[WAR] new spawner obj={(em.HasComponent<ObjectDataCD>(s) ? em.GetComponentData<ObjectDataCD>(s).objectID.ToString() : "?")} owner={f} first={!_scanned}");
+                }
+                var sp = em.GetComponentData<SpawnerCD>(s);
+                _su.Add(new Unit { X = p.x, Y = p.y, Faction = em.GetComponentData<WarFactionCD>(s).faction, R = sp.maxSpawnDistance + 2f });
             }
+            _scanned = true;
 
             var cEnts = _creatures.ToEntityArray(Allocator.Temp);
             _cu.Clear();
@@ -66,7 +81,7 @@ namespace CoreKeeperWar.Mod
             _all.Clear(); _allEnt.Clear();
             for (int i = 0; i < cEnts.Length; i++) { _all.Add(_cu[i]); _allEnt.Add(cEnts[i]); }
             for (int i = 0; i < sEnts.Length; i++) { _all.Add(_su[i]); _allEnt.Add(sEnts[i]); }
-            foreach (var pl in _players.ToEntityArray(Allocator.Temp))
+            foreach (var pl in plEnts)
             {
                 var p = em.GetComponentData<LocalTransform>(pl).Position;
                 _all.Add(new Unit { X = p.x, Y = p.y, Faction = Faction.Player }); _allEnt.Add(pl);

@@ -14,4 +14,7 @@ Check(War.SpawnerToConvert(new Unit { X = 49, Y = 0, Faction = Faction.Monster }
 Check(War.SpawnerToConvert(new Unit { X = 40, Y = 0, Faction = Faction.Monster }, sp) == -1, "too far to convert");
 Check(War.SpawnerToConvert(new Unit { X = 49, Y = 0, Faction = Faction.Player }, sp) == -1, "own spawner not converted");
 Check(War.SpawnerToConvert(new Unit { X = 1, Y = 0, Faction = Faction.Player }, sp) == 0, "ally converts monster spawner");
-Console.WriteLine("PASS: 全9件");
+var big = new[] { new Unit { X = 0, Y = 0, Faction = Faction.Player, R = 12 } };
+Check(War.FactionOfNewCreature(10, 0, big) == Faction.Player, "per-spawner radius R covers wide spawn distance");
+Check(War.FactionOfNewCreature(10, 0, new[] { new Unit { X = 0, Y = 0, Faction = Faction.Player } }) == Faction.Monster, "default radius too small without R");
+Console.WriteLine("PASS: 全11件");

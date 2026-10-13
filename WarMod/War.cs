@@ -4,7 +4,7 @@ namespace CoreKeeperWar
 {
     public enum Faction : byte { Monster = 0, Player = 1 }
 
-    public struct Unit { public float X, Y; public Faction Faction; }
+    public struct Unit { public float X, Y; public Faction Faction; public float R; } // R: extra spawn radius (0 = default)
 
     public static class War
     {
@@ -31,11 +31,12 @@ namespace CoreKeeperWar
         /// Faction a freshly spawned creature should take: owner of nearest spawner in range, else Monster (vanilla).
         public static Faction FactionOfNewCreature(float x, float y, IReadOnlyList<Unit> spawners)
         {
-            int best = -1; float bd = SpawnOwnerRange * SpawnOwnerRange;
+            int best = -1; float bd = float.MaxValue;
             for (int i = 0; i < spawners.Count; i++)
             {
+                var r = System.Math.Max(SpawnOwnerRange, spawners[i].R);
                 var d = D2(x, y, spawners[i].X, spawners[i].Y);
-                if (d <= bd) { bd = d; best = i; }
+                if (d <= r * r && d < bd) { bd = d; best = i; }
             }
             return best < 0 ? Faction.Monster : spawners[best].Faction;
         }
