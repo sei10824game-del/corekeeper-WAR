@@ -23,6 +23,7 @@ namespace CoreKeeperWar.Mod
             _spawners = GetEntityQuery(ComponentType.ReadOnly<SpawnerCD>(), ComponentType.ReadOnly<LocalTransform>());
             _players = GetEntityQuery(ComponentType.ReadOnly<PlayerGhost>(), ComponentType.ReadOnly<LocalTransform>());
             base.OnCreate();
+            UnityEngine.Debug.Log("[WAR] system created in " + World.Name);
         }
 
         protected override void OnUpdate()
@@ -65,18 +66,21 @@ namespace CoreKeeperWar.Mod
                 _all.Add(new Unit { X = p.x, Y = p.y, Faction = Faction.Player }); _allEnt.Add(pl);
             }
 
+            int set = 0, conv = 0;
             for (int i = 0; i < cEnts.Length; i++)
             {
                 var u = _cu[i];
                 int n = War.Nearest(u.X, u.Y, _all, War.Opposite(u.Faction));
-                if (n >= 0) GameBindings.SetTarget(em, cEnts[i], _allEnt[n]);
+                if (n >= 0) { GameBindings.SetTarget(em, cEnts[i], _allEnt[n]); set++; }
                 int s = War.SpawnerToConvert(u, _su);
                 if (s >= 0)
                 {
+                    conv++;
                     em.SetComponentData(sEnts[s], new WarFactionCD { faction = u.Faction });
                     _su[s] = new Unit { X = _su[s].X, Y = _su[s].Y, Faction = u.Faction };
                 }
             }
+            UnityEngine.Debug.Log($"[WAR] creatures={cEnts.Length} spawners={sEnts.Length} players={_players.CalculateEntityCount()} targeted={set} converted={conv}");
         }
     }
 }
