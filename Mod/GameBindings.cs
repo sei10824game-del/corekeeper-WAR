@@ -10,8 +10,6 @@ namespace CoreKeeperWar.Mod
 
     public static class GameBindings
     {
-        public static EntityQuery CreatureQuery(ref SystemState s) => s.GetEntityQuery(ComponentType.ReadOnly<EnemyCD>(), ComponentType.ReadOnly<LocalTransform>(), ComponentType.ReadWrite<FactionCD>());
-        public static EntityQuery SpawnerQuery(ref SystemState s) => s.GetEntityQuery(ComponentType.ReadOnly<SpawnerCD>(), ComponentType.ReadOnly<LocalTransform>());
 
         /// Chase target any distance away. ChaseStateCD.targetEntity = current target; neverTimeoutChasing stops it giving up.
         /// VERIFY: the state machine must be in the chase state (internalState) and the game's own target-select system may overwrite targetEntity each tick.
